@@ -10,7 +10,7 @@ Dofbot + 카메라 2대(손목 카메라, 메타 뷰)로 종이·비닐·플라�
 4. **놓기**: 클래스별 고정 자세 → 색종이 위에서 그리퍼 열기
 5. 남은 물체가 없거나 제한 시간(6분)이 될 때까지 반복
 
-자세한 내용은 [docs/PIPELINE.md](docs/PIPELINE.md) 참고.
+자세한 내용은 [docs/PIPELINE.md](docs/PIPELINE.md), 해야 할 일은 [docs/TODO.md](docs/TODO.md) 참고.
 
 ## 폴더 구조
 ```
