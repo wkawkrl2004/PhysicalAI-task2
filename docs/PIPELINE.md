@@ -1,5 +1,7 @@
 # Dofbot 분리수거 Task 전체 파이프라인
 
+> 검증 결과(오류·제한 사항)는 [REVIEW.md](REVIEW.md) 참고. 아래 내용에 일부 반영됨.
+
 ## 0. 과제 요약
 - **물체**: 종이류(A4 뭉치, 종이팩), 비닐류(초코파이 봉지 크기 이하), 플라스틱류(야쿠르트 병, 요플레 용기) 각 2개, 총 6개
 - **배치**: Dofbot 정면 가운데 기준 반지름 23cm 호 안에 무작위
@@ -56,7 +58,7 @@
 
 | 항목 | 설정 |
 |---|---|
-| 작업 영역 | 반지름 23cm 호를 테이프로 표시 |
+| 작업 영역 | **Dofbot 앞 가운데**를 중심으로 반지름 23cm 호를 테이프로 표시 (중심은 J1 축이 아님, `docs/REVIEW.md` 1번) |
 | 색종이 | 위치를 테이프로 고정 |
 | 메타 뷰 카메라 | 50~70cm 높이, 최대한 수직. 작업 영역 + 색종이 3장이 한 화면에 |
 | 손목 카메라 | 그리퍼 위 기존 카메라 |
@@ -73,7 +75,7 @@
 |---|---|
 | C1. 관절별 범위 | J1~J5를 하나씩 끝까지 움직여 최소/최대 기록 (보통 J5는 0~270°, 나머지 0~180°) |
 | C2. 서보 방향·영점 | 모든 서보 90° → 팔이 수직으로 서는지 확인. 서보값 증가 시 숙는 방향 기록(SIGN) |
-| C3. 링크 길이 | 바닥→어깨 축(h), 어깨→팔꿈치(a2), 팔꿈치→손목(a3), 손목→집는 지점(a4) |
+| C3. 링크 길이 | 바닥→어깨 축(h), 어깨→팔꿈치(a2), 팔꿈치→손목(a3), 손목→집는 지점(손가락 중간, a4), 어깨 축의 수평 오프셋, d0 → 수직 집기 가능 영역 지도 작성 |
 | C4. 그리퍼 | 완전 열림, 완전 닫힘, 물체별로 잡았을 때 값 |
 | C5. 고정 자세 | `HOME`(메타 뷰를 가리지 않는 자세), `DROP_PAPER/VINYL/PLASTIC` |
 | C6. 충돌 확인 | HOME ↔ DROP ↔ 작업 영역 끝 사이 이동 시 카메라 지지대·책상 충돌 여부 |
@@ -86,6 +88,7 @@
 
 ### D1. 호모그래피 (픽셀 → 책상 cm)
 - 좌표계: 원점 = J1 회전축 바로 아래, x축 = 로봇 정면, y축 = 왼쪽
+- 작업 영역 = 중심 (d0, 0), 반지름 23cm (d0 = J1 축 ↔ 베이스 앞 가운데 거리). J1 축 기준 최대 거리는 23 + d0
 - 책상에 표시 6~9개를 두고 실제 좌표를 자로 측정 (경계 + 내부)
 - 팔을 HOME에 둔 상태에서 메타 뷰의 표시 픽셀 기록 → `cv2.findHomography` → `pix2xy(u, v)`
 - 렌즈 왜곡이 크면 먼저 체스보드로 왜곡 보정(`cv2.calibrateCamera`)
@@ -93,7 +96,8 @@
 ### D2. 기구학 (IK + 보정)
 - **FK**: 서보값 → 그리퍼 끝 (x, y, z)
 - **IK**: J1 = 방향 각도 θ, J2~J4 = 3링크 평면 IK (피치 지정 시 닫힌 해)
-  - 기본은 수직 집기(피치 180°). 도달 불가 시 피치를 5°씩 세우며 해를 찾음 (`ik_auto_pitch`)
+  - 기본은 수직 집기(피치 180°). 도달 불가 시 피치를 5°씩 세우며(최대 90°까지) 해를 찾음 (`ik_auto_pitch`)
+  - J1에도 SIGN·OFFSET 적용
 - **보정**: 실측 점 15~25개(경계 포함)를 직접 집는 자세의 서보값을 기록 → `scipy.optimize.least_squares`로 OFFSET(필요 시 링크 길이)을 FK 오차가 최소가 되도록 맞춤
 - **대안**: J1 = θ의 1차 함수, J2~J4 = 거리 r에 대한 1차원 보간
 
@@ -108,7 +112,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 클래스 | `paper`, `vinyl`, `plastic` |
+| 클래스 | 세부 클래스 `a4`, `carton`, `vinyl`, `yakult`, `yogurt`로 학습 → `paper`/`vinyl`/`plastic`으로 매핑 |
 | 데이터 | 메타 뷰 이미지 400~800장. 물체 개수(1~6), 배치, 방향, 조명 다양하게. 붙어 있는 경우, 팔이 일부 보이는 경우 포함 |
 | ⚠️ Test 2 대비 | 다른 브랜드·색의 같은 종류 물체를 최대한 모으고, 다른 조와 물체를 빌려 촬영 |
 | 라벨링 | Roboflow 또는 LabelImg |
@@ -140,7 +144,7 @@
 | 입력 | 손목 이미지(224×224), 현재 관절값 6개, 클래스 one-hot. (선택) 메타 뷰 대상 주변 crop |
 | 출력 | 앞으로 k=10스텝의 관절 목표값 (action chunking) |
 | 모델 | 1단계 ResNet18(사전학습)+MLP → 2단계 ACT |
-| 데이터 수집 | `data_collect.ipynb` 확장: 카메라 2대, 5~10 FPS, 에피소드 단위 |
+| 데이터 수집 | `data_collect.ipynb` 확장: 카메라 2대, 5~10 FPS, 에피소드 단위, 서보 버스 접근에 Lock, 조이스틱을 IK로 연결해 x/y/z 직교 조작 |
 | 에피소드 흐름 | 스크립트로 접근 자세 자동 이동 → 사람이 조이스틱으로 하강·집기·들어올리기 → 종료 버튼 |
 | 데이터 양 | 클래스별 50~100 에피소드 (총 150~300) |
 | 행동 라벨 | 조이스틱 스레드가 보낸 목표 각도 기록 |
@@ -188,21 +192,21 @@ start = time.time()
 fail_count = defaultdict(int)
 
 while time.time() - start < T_LIMIT:
-    move(HOME); wait_settle()
+    move(HOME); wait_settle()                   # move()는 이동 시간만큼 sleep 포함
     dets = filter_workspace(yolo(cam_top_read()))
     if not dets: break
-    dets = [d for d in dets if fail_count[d.key] < 3]
+    dets = [d for d in dets if fail_count[match_key(d)] < 3]   # 좌표 3cm 이내 = 같은 물체
     if not dets: break
     tgt = min(dets, key=lambda d: d.r)          # 가까운 것부터
     x, y = pix2xy(*tgt.center)
 
     sol, pitch = ik_auto_pitch(x, y, APPROACH_Z)
-    if sol is None: fail_count[tgt.key] += 1; continue
+    if sol is None: fail_count[match_key(tgt)] += 1; continue
     move(sol + [j5_for(tgt), GRIP_OPEN])
 
     grasp(tgt)               # F1 스크립트 or F2 정책 (+F3 파라미터)
     lift()
-    if not grasp_success(): fail_count[tgt.key] += 1; continue
+    if not grasp_success(): fail_count[match_key(tgt)] += 1; continue
 
     cls = tgt.cls if tgt.conf > 0.7 else wrist_classify()
     move(POSES[f'DROP_{cls.upper()}']); open_gripper()
