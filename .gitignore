@@ -1,0 +1,9 @@
+# 대용량 데이터와 모델은 저장소에 올리지 않음
+data/yolo/*
+data/episodes/*
+!data/**/.gitkeep
+models/*.pt
+models/*.onnx
+calib/*.jpg
+.ipynb_checkpoints/
+__pycache__/
